@@ -1,71 +1,117 @@
 <template>
+  <div class="header">
+    <label> Helmes </label>
+    <Button
+      type="button"
+      severity="secondary"
+      label="Create Session"
+      @click="createSession"
+    ></Button>
+  </div>
+
   <div class="card">
-    <form @submit.prevent="onSubmit">
-      Please enter your name and pick the Sectors you are currently involved in.
-      <br />
-
-      <div class="flex flex-wrap gap-2">
-        Name:
-        <InputText type="text" size="small" v-model="formData.name" />
-        <InlineMessage v-if="v$.formData.name.$error" severity="error"
-          >{{ v$.formData.name.$errors[0].$message }}
-        </InlineMessage>
+    <div>
+      <div class="errors" v-if="errors">
+        <InlineMessage
+          severity="error"
+          v-for="error in errors"
+          v-bind:key="error"
+          >{{ error }}</InlineMessage
+        >
       </div>
-
-      <br />
-      <br />
-      Sectors:
-      <TreeSelect
-        v-model="formData.selectedSectors"
-        placeholder="Select sectors"
-        selectionMode="multiple"
-        :options="sectors"
+      <InlineMessage severity="success" class="success" v-if="success"
+        >Info successfully saved!</InlineMessage
       >
-      </TreeSelect>
-      <InlineMessage v-if="v$.formData.selectedSectors.$error" severity="error"
-        >{{ v$.formData.selectedSectors.$errors[0].$message }}
+    </div>
+    <form @submit.prevent="onSubmit">
+      <label class="form-group head-text"
+        >Please enter your name and pick the Sectors you are currently involved
+        in.</label
+      >
+      <div class="form-group">
+        <div class="form-group-label">
+          <label>Name:</label>
+          <InlineMessage v-if="v$.formData.name.$error" severity="error"
+            >{{ v$.formData.name.$errors[0].$message }}
+          </InlineMessage>
+        </div>
+        <InputText
+          type="text"
+          size="small"
+          v-model="$store.state.formData.name"
+        />
+      </div>
+      <div class="form-group">
+        <div class="form-group-label">
+          <label>Sectors:</label>
+          <InlineMessage
+            v-if="v$.formData.selectedSectors.$error"
+            severity="error"
+            >{{ v$.formData.selectedSectors.$errors[0].$message }}
+          </InlineMessage>
+        </div>
+        <TreeSelect
+          v-model="formData.selectedSectors"
+          placeholder="Select sectors"
+          selectionMode="multiple"
+          :options="sectors"
+        >
+        </TreeSelect>
+      </div>
+      <InlineMessage v-if="v$.formData.isTermsAccepted.$error" severity="error"
+        >{{ v$.formData.isTermsAccepted.$errors[0].$message }}
       </InlineMessage>
-      <br />
-      <br />
-      <input type="checkbox" v-model="formData.isTermsAgreed" /> Agree to terms
-      <InlineMessage v-if="v$.formData.isTermsAgreed.$error" severity="error"
-        >{{ v$.formData.isTermsAgreed.$errors[0].$message }}
-      </InlineMessage>
-      <br />
-      <br />
-      <input type="submit" value="Save" />
+      <div class="agreement">
+        <input
+          class="radio"
+          type="checkbox"
+          v-model="formData.isTermsAccepted"
+        />
+        <label class="agreementText">Agree to terms</label>
+      </div>
+      <div class="button">
+        <Button label="Save" type="submit" :disabled="isSessionIdNull"></Button>
+      </div>
     </form>
   </div>
-  {{ formData.selectedSectors }}
 </template>
 
 <script>
 import TreeSelect from "primevue/treeselect";
 import InputText from "primevue/inputtext";
-import { SECTORS } from "@/assets/constants";
-import {
-  maxLength,
-  helpers,
-  required,
-  alpha,
-  sameAs,
-} from "@vuelidate/validators";
+import Button from "primevue/button";
+import { maxLength, helpers, required, sameAs } from "@vuelidate/validators";
 import useVuelidate from "@vuelidate/core";
 import InlineMessage from "primevue/inlinemessage";
+import { mapState } from "vuex";
 
 export default {
   name: "PersonWorkInfo",
+  data() {
+    return {
+      sessionId: sessionStorage.getItem("sessionId") || null,
+    };
+  },
   setup() {
     return { v$: useVuelidate() };
   },
-  data: () => ({
-    sectors: SECTORS,
-    formData: {
-      name: "",
-      selectedSectors: [],
-      isTermsAgreed: null,
+  mounted() {
+    this.$store.dispatch("fetchSectors");
+    this.$store.dispatch("fetchPersonSectorsInfo");
+  },
+  computed: {
+    ...mapState(["errors", "success"]),
+    sectors() {
+      return this.$store.state.sectors;
     },
-  }),
+    formData() {
+      return this.$store.state.formData;
+    },
+    isSessionIdNull() {
+      console.log("isSessionIdNull");
+      return !this.sessionId;
+    },
+  },
   validations() {
     return {
       formData: {
@@ -74,10 +120,9 @@ export default {
             this.$t("form_errors.required"),
             required
           ),
-          alpha: helpers.withMessage(this.$t("form_errors.alpha"), alpha),
           maxLength: helpers.withMessage(
-            this.$t("form_errors.max_length", { max: 5 }),
-            maxLength(5)
+            this.$t("form_errors.max_length", { max: 100 }),
+            maxLength(100)
           ),
         },
         selectedSectors: {
@@ -86,7 +131,7 @@ export default {
             required
           ),
         },
-        isTermsAgreed: {
+        isTermsAccepted: {
           required: helpers.withMessage(
             this.$t("form_errors.required"),
             required
@@ -99,32 +144,110 @@ export default {
       },
     };
   },
-  components: { TreeSelect, InputText, InlineMessage },
+  components: { TreeSelect, InputText, InlineMessage, Button },
   methods: {
+    async createSession() {
+      this.$store.commit("setSuccess", false);
+      await this.$store.dispatch("createSession");
+      this.v$.$reset();
+      this.sessionId = sessionStorage.getItem("sessionId");
+    },
     async onSubmit() {
       this.v$.$touch();
       if (!this.v$.formData.$invalid) {
-        try {
-          const response = await fetch("/api/person-work-info", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(this.formData),
-          });
-
-          if (response.ok) {
-            // Handle success
-          } else {
-            // Handle error
-          }
-        } catch (error) {
-          console.error("Error submitting form:", error);
-        }
+        this.$store.commit("setFormData", this.formData);
+        return this.$store.dispatch("postPersonSectorsInfo");
       }
     },
   },
 };
 </script>
 
-<style></style>
+<style>
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  margin: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #eeeeee;
+  color: #1318c8;
+  font-size: 1.5em;
+  text-align: center;
+  padding: 1em;
+}
+
+.card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 1em;
+}
+
+form {
+  max-width: 400px;
+  width: 100%;
+}
+
+.form-group {
+  margin-bottom: 2em;
+}
+.form-group-label {
+  display: flex;
+  flex-direction: row;
+  justify-content: start;
+  align-items: center;
+  margin-bottom: 0.2em;
+}
+
+.agreement {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.head-text {
+  margin-bottom: 2em;
+}
+
+.radio {
+  width: 10%;
+}
+
+.agreementText {
+  margin: 0;
+}
+
+.button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 2em;
+}
+
+label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 1em;
+  margin-right: 0.5em;
+}
+
+input {
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+InlineMessage {
+  height: 0.5em;
+}
+</style>
