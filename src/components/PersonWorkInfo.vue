@@ -108,7 +108,6 @@ export default {
       return this.$store.state.formData;
     },
     isSessionIdNull() {
-      console.log("isSessionIdNull");
       return !this.sessionId;
     },
   },
