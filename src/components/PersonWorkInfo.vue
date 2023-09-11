@@ -39,6 +39,7 @@
           type="text"
           size="small"
           v-model="$store.state.formData.name"
+          :disabled="isSessionIdNull"
         />
       </div>
       <div class="form-group">
@@ -55,6 +56,7 @@
           placeholder="Select sectors"
           selectionMode="multiple"
           :options="sectors"
+          :disabled="isSessionIdNull"
         >
         </TreeSelect>
       </div>
@@ -66,6 +68,7 @@
           class="radio"
           type="checkbox"
           v-model="formData.isTermsAccepted"
+          :disabled="isSessionIdNull"
         />
         <label class="agreementText">Agree to terms</label>
       </div>
